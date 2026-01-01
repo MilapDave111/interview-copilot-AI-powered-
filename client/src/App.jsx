@@ -69,7 +69,7 @@ function App() {
       console.log("Uploaded Successfully: ", response.data);
       setTranscript(response.data.transcript);
 
-      alert("Audio is sent to server and saved as: ", response.data.filename);
+      alert(response.data.filename);
 
     } catch (error) {
       console.error("Upload failed: ", error);
