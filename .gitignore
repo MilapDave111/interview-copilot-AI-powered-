@@ -1,12 +1,15 @@
 # Python
+.env
 venv/
 server-ai/venv/
+server-ai/.env
 __pycache__/
-
+uploads/
 # Binaries
 *.exe
 *.dll
 *.so
+*.webm
 
 # FFmpeg
 external requirements/
