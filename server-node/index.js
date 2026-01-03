@@ -47,8 +47,13 @@ app.post('/api/upload',upload.single("audio"), async (req,res) => {
     console.log("File saved successfully! :",req.file.path);
 
     try{
+
+        const userTopic = req.body.topic || "General";
+        console.log("Topic received from Frontend:", userTopic);
+
         const formData = new FormData();
         formData.append('file', fs.createReadStream(req.file.path));
+        formData.append('topic', userTopic);
         console.log("Sending file to python AI...");
 
         const pythonResponse = await axios.post('http://127.0.0.1:8000/transcribe',formData,{
