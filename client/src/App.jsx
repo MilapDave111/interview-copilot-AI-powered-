@@ -13,17 +13,20 @@ function App() {
   const [history, setHistory] = useState([]);
   const [selectedTopic, setSelectedTopic] = useState('general');
 
-
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
-
+  const canvasRef = useRef(null);
+  const animationRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const analyserRef = useRef(null);
+  const streamRef = useRef(null);
 
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
 
       const mediaRecorder = new MediaRecorder(stream);
-
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (event) => {
@@ -34,9 +37,7 @@ function App() {
 
       mediaRecorder.onstop = () => {
         const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-
         const url = URL.createObjectURL(blob);
-
         setAudioUrl(url);
         setAudioBlob(blob);
         audioChunksRef.current = [];
@@ -54,6 +55,16 @@ function App() {
   const stopRecording = () => {
     mediaRecorderRef.current.stop();
     setIsRecording(false);
+
+    // GOOD CODE (Safe Cleanup)
+    return () => {
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      
+      // Only close if it's not already closed
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close();
+      }
+    };
   };
 
   const uploadAudio = async () => {
@@ -66,14 +77,18 @@ function App() {
     formData.append("topic", selectedTopic);
 
     try {
-      const response = await axios.post('http://localhost:3000/api/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      console.log("Uploaded Successfully: ", response.data);
+      const response = await axios.post(
+        'http://localhost:3000/api/upload',
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } }
+      );
+
       setTranscript(response.data.transcript);
       setAnalysis(response.data.analysis);
+
+      if (response.data.analysis && response.data.analysis.feedback) {
+        speakText(response.data.analysis.feedback);
+      }
 
       alert("Transcription Completed!");
 
@@ -89,26 +104,17 @@ function App() {
     try {
       const response = await axios.get('http://localhost:3000/api/history');
 
-      // DEBUG: Look at this in your browser console (F12)
-      console.log("Raw History Data:", response.data);
-
-      // SAFETY CHECK 1: Is response.data an array?
       if (Array.isArray(response.data)) {
         setHistory(response.data);
-      }
-      // SAFETY CHECK 2: Is it inside a property like response.data.rows?
-      else if (response.data && Array.isArray(response.data.rows)) {
+      } else if (response.data && Array.isArray(response.data.rows)) {
         setHistory(response.data.rows);
-      }
-      // FALLBACK: If it's neither, use empty list to prevent crash
-      else {
-        console.error("Data format is wrong. Resetting to empty.");
+      } else {
         setHistory([]);
       }
 
     } catch (error) {
       console.error("Error fetching history:", error);
-      setHistory([]); // Always default to empty array on error
+      setHistory([]);
     }
   };
 
@@ -118,9 +124,67 @@ function App() {
 
   const handleTopicChange = (e) => {
     setSelectedTopic(e.target.value);
-    console.log("Topic Selected:", e.target.value);
-  }
+  };
 
+  const speakText = (text) => {
+    if (!text) return;
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // ✅ SAME useEffect BLOCK — MOVED ONLY
+  useEffect(() => {
+    if (isRecording && streamRef.current && canvasRef.current) {
+
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioContext.createMediaStreamSource(streamRef.current);
+      const analyser = audioContext.createAnalyser();
+
+      analyser.fftSize = 256;
+      source.connect(analyser);
+
+      audioContextRef.current = audioContext;
+      analyserRef.current = analyser;
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d");
+
+      const draw = () => {
+        if (!isRecording) return;
+
+        animationRef.current = requestAnimationFrame(draw);
+        analyser.getByteFrequencyData(dataArray);
+
+        ctx.fillStyle = "rgb(20, 20, 20)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const barWidth = (canvas.width / bufferLength) * 2.5;
+        let x = 0;
+
+        for (let i = 0; i < bufferLength; i++) {
+          const barHeight = dataArray[i] / 2;
+          ctx.fillStyle = `rgb(${barHeight + 100}, 50, 50)`;
+          ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+          x += barWidth + 1;
+        }
+      };
+
+      draw();
+    }
+
+    return () => {
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      if (audioContextRef.current) audioContextRef.current.close();;
+    };
+  }, [isRecording]);
+  
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
       <h1 className="text-3xl font-bold mb-8">Interview Audio Test</h1>
@@ -156,10 +220,22 @@ function App() {
             <Square size={40} className="text-white" />
           </button>
         )}
+        
 
         <p className="text-gray-400">
           {isRecording ? "Listening... (Click to Stop)" : "Click mic to record"}
         </p>
+
+        {isRecording && (
+          <div className="w-full max-w-md h-24 bg-gray-900 rounded-lg mb-4 overflow-hidden border border-gray-700 shadow-inner">
+             <canvas 
+               ref={canvasRef} 
+               width="400" 
+               height="100" 
+               className="w-full h-full"
+             />
+          </div>
+        )}
 
         {/* Playback & Upload Section */}
         {audioUrl && (
@@ -204,6 +280,12 @@ function App() {
             {/* Header with Score */}
             <div className="flex items-center justify-between mb-6 border-b border-slate-600 pb-4">
               <h2 className="text-2xl font-bold text-white">AI Analysis</h2>
+              <button 
+                  onClick={() => speakText(analysis.feedback)}
+                  className="text-green-400 hover:text-green-300 text-xs font-bold uppercase flex items-center gap-1"
+                >
+                  <Play size={25} /> Listen
+                </button>
 
               {/* Dynamic Color: Green if score > 7, else Red */}
               <div className={`px-4 py-2 rounded-full font-bold text-xl ${analysis.score >= 7 ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
