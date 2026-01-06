@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { Mic, Square, Play, Send, Loader2 } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 function App() {
 
@@ -10,7 +11,7 @@ function App() {
   const [audioBlob, setAudioBlob] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [transcript, setTranscript] = useState("");
-  const [analysis, setAnalysis] = useState(""); // Stores the AI feedback object
+  const [analysis, setAnalysis] = useState("");
   const [history, setHistory] = useState([]);
   const [selectedTopic, setSelectedTopic] = useState('General');
 
@@ -175,6 +176,12 @@ function App() {
     fetchHistory();
   }, []);
 
+  const chartData = [...history].reverse().map((item,index)=> ({
+    attempt : index+1,
+    score : item.json_log?.analysis?.score || 0,
+    data : new Date (item.created_at).toLocaleDateString()
+  }));
+
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
       <h1 className="text-3xl font-bold mb-8">Interview Copilot</h1>
@@ -244,6 +251,33 @@ function App() {
           </div>
         )}
 
+        {isUploading && !analysis && (
+          <div className="mt-8 p-6 bg-slate-800 rounded-xl shadow-2xl w-full border border-slate-700 animate-pulse">
+            
+            {/* EXPLAIN: This mimics the 'Score Header' */}
+            <div className="flex items-center justify-between mb-6 border-b border-slate-600 pb-4">
+              {/* Gray bar representing the Title */}
+              <div className="h-8 bg-slate-700 rounded w-1/3"></div>
+              {/* Gray circle representing the Score Badge */}
+              <div className="h-10 w-24 bg-slate-700 rounded-full"></div>
+            </div>
+
+            {/* EXPLAIN: This mimics the 'Feedback Section' */}
+            <div className="mb-6">
+              <div className="h-4 bg-slate-700 rounded w-1/4 mb-3"></div>
+              {/* Large block representing the feedback text paragraph */}
+              <div className="h-24 bg-slate-700 rounded-lg w-full"></div>
+            </div>
+
+            {/* EXPLAIN: This mimics the 'Improvement Section' */}
+            <div>
+               <div className="h-4 bg-slate-700 rounded w-1/4 mb-3"></div>
+               <div className="h-16 bg-slate-700 rounded-lg w-full"></div>
+            </div>
+          
+          </div>
+        )}
+
         {/* AI REPORT CARD (With Speak Button) */}
         {analysis && (
           <div className="mt-8 p-6 bg-slate-800 rounded-xl shadow-2xl w-full border border-slate-700 animate-fade-in">
@@ -274,6 +308,24 @@ function App() {
             </div>
           </div>
         )}
+
+        <LineChart width={1000} height={300} data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis dataKey="attempt" stroke="#9CA3AF" label={{ value: 'Attempt #', position: 'insideBottom', offset: -5 }} />
+                <YAxis stroke="#9CA3AF" domain={[0, 10]} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#1F2937', border: 'none', borderRadius: '8px', color: '#fff' }}
+                  itemStyle={{ color: '#60A5FA' }}
+                />
+                <Line 
+                  type="linear"
+                  dataKey="score" 
+                  stroke="#3B82F6" 
+                  strokeWidth={3}
+                  dot={{ fill: '#3B82F6', r: 4 }} 
+                  activeDot={{ r: 6 }} 
+                />
+              </LineChart>
 
         {/* HISTORY LIST (Safe Mode) */}
         <div className="w-full mt-12 mb-20">
