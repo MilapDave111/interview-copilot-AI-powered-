@@ -7,6 +7,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const FormData = require('form-data');
+const { fork } = require('child_process');
 
 const app = express();
 app.use(cors());
@@ -107,6 +108,47 @@ app.get('/api/history', async(req,res) => {
         });
     }
 });
+
+app.post('/api/upload-resume',upload.single("resume"), async (req,res) => {
+    if(!req.file){
+        return res.status(400).json({
+            error: "No resume recieved"
+        });
+    }
+    console.log("Resume received successfully! :",req.file.path);
+    try {
+        const formData = new FormData();
+        formData.append('file', fs.createReadStream(req.file.path));
+
+        console.log("Forwarding resume to Python AI...");
+
+        const pythonResponse = await axios.post('http://127.0.0.1:8000/analyze-resume', formData, {
+            headers: { ...formData.getHeaders() }
+        });
+
+        // --- 🟢 FIX: Check if Python actually returned questions ---
+        if (!pythonResponse.data.questions || pythonResponse.data.error) {
+            console.error("Python AI Error:", pythonResponse.data);
+            return res.status(500).json({ 
+                error: "AI failed to generate questions. Ensure PDF is text-based (not an image)." 
+            });
+        }
+        // -----------------------------------------------------------
+
+        console.log("AI Questions Generated:", pythonResponse.data.questions);
+
+        res.json({
+            message: "Resume processed successfully",
+            questions: pythonResponse.data.questions
+        });
+
+    } catch (error) {
+        console.error("Resume Processing Error:", error.message);
+        res.status(500).json({ error: "Failed to analyze resume" });
+    }
+});
+
+
 
 app.listen(3000, ()=>{
     console.log("Node server running on http://localhost:3000");

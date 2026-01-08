@@ -9,6 +9,9 @@ import traceback
 from dotenv import load_dotenv
 from groq import Groq
 import json
+from resume_parser import extract_text_from_pdf
+
+
 
 load_dotenv()
 
@@ -75,9 +78,66 @@ async def transcribe_audio(
             "transcript":result["text"],
             "analysis":analysis_json
         }
+    
 
     except Exception as e:
         
         print(f"CRITICAL ERROR: {str(e)}")
         traceback.print_exc() 
+        return {"error": str(e)}
+    
+
+@app.post("/analyze-resume")
+async def analyse_resume(file: UploadFile=File(...)):
+    """
+    Receives a PDF resume, extracts text, and asks AI to generate questions.
+    """
+    try:
+        temp_filename = f"resuem_{file.filename}"
+        with open(temp_filename,"wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        print(f"Resume saved to {temp_filename}. Extracting text...")
+
+        resume_text = extract_text_from_pdf(temp_filename)
+
+        if not resume_text:
+            return {"error": "Failed to read PDF text"}
+
+        print("Text Extracting success! Asking GROQ for questions...")
+
+        system_prompt = """
+        You are an expert technical interviewer.
+        I will give you a candidate's resume text.
+        
+        TASK:
+        Generate 3 specific, hard technical interview questions based ONLY on the projects and skills listed in this resume.
+        Do not ask generic questions like "Tell me about yourself."
+        Ask about their specific tech stack (e.g., "How did you optimize MongoDB in your ShopApp?").
+        
+        OUTPUT FORMAT:
+        Return ONLY a JSON object with a list of strings called "questions".
+        Example: { "questions": ["Question 1...", "Question 2..."] }
+        """   
+
+        chat_complition = client.chat.completions.create(
+            messages=[
+                {"role":"system","content":system_prompt},
+                {"role":"user","content" :f"Here is the resume:\n\n{resume_text}"}
+            ],
+            model="llama-3.1-8b-instant",
+            response_format={"type":"json_object"}
+        )
+
+        response_content = chat_complition.choices[0].message.content 
+        questions_json = json.loads(response_content)
+
+        return{
+            "message": "Resume analyzed Successfully!!!",
+            "questions":questions_json["questions"]
+        } 
+    
+    except Exception as e:
+        print(f"CRITICAL ERROR: {str(e)}")
+        traceback.print_exc()
         return {"error": str(e)}

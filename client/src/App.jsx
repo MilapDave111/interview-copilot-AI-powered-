@@ -15,6 +15,8 @@ function App() {
   const [analysis, setAnalysis] = useState("");
   const [history, setHistory] = useState([]);
   const [selectedTopic, setSelectedTopic] = useState('General');
+  const [resumeQuestions, setResumeQuestions] = useState([]);
+  const [isAnalysingResume, setIsAnalysingResume] = useState(false);
 
   // --- REFS ---
   const mediaRecorderRef = useRef(null);
@@ -32,10 +34,10 @@ function App() {
     if (!text) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.pitch = 1.9;
+    utterance.pitch = 1;
     utterance.rate = 1;
     utterance.volume = 1.0;
-    
+
     window.speechSynthesis.speak(utterance);
   };
 
@@ -186,12 +188,89 @@ function App() {
     data: new Date(item.created_at).toLocaleDateString()
   }));
 
+  const handleResumeUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setIsAnalysingResume(true);
+    const formData = new FormData();
+    formData.append('resume', file);
+
+    try {
+      const response = await axios.post('http://localhost:3000/api/upload-resume', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      const questions = response.data.questions || [];
+      setResumeQuestions(questions);
+      toast.success("Your questions are READY");
+
+      if (response?.data?.questions?.length > 0) {
+
+        speakText("I have analyzed your resume and i will ask you questions based on your resume... Here we go...");
+      }
+    } catch (error) {
+      console.error("Resume Error:", error);
+      toast.error("Failed to analyze resume.");
+    } finally {
+      setIsAnalysingResume(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
       <Toaster position="top-center" toastOptions={{ style: { background: '#333', color: '#fff' } }} />
       <h1 className="text-3xl font-bold mb-8">Interview Copilot</h1>
 
       <div className="flex flex-col items-center gap-6 w-full max-w-2xl">
+
+        <div className="w-full max-w-2xl bg-slate-800 p-6 rounded-xl border border-slate-700 mb-8 animate-fade-in">
+          <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            📄 Resume AI Analysis
+          </h2>
+
+          {/* File Input */}
+          <div className="flex flex-col gap-4">
+            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-600 border-dashed rounded-lg cursor-pointer bg-gray-700 hover:bg-gray-600 transition">
+              <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                <p className="mb-2 text-sm text-gray-400">
+                  <span className="font-semibold">Click to upload PDF</span>
+                </p>
+                <p className="text-xs text-gray-500">AI will generate custom questions</p>
+              </div>
+              <input
+                type="file"
+                className="hidden"
+                accept=".pdf"
+                onChange={handleResumeUpload}
+                disabled={isAnalysingResume}
+              />
+            </label>
+
+            {/* Loading State */}
+            {isAnalysingResume && (
+              <div className="flex items-center gap-2 text-blue-400">
+                <Loader2 className="animate-spin" size={20} />
+                <span>Reading resume and generating questions...</span>
+              </div>
+            )}
+
+            {/* Display Generated Questions */}
+           {resumeQuestions?.length > 0 && (
+              <div className="mt-4 bg-slate-900 p-4 rounded-lg border border-slate-700">
+                <h3 className="text-green-400 font-bold mb-2">Targeted Questions:</h3>
+                <ul className="list-disc list-inside space-y-2 text-gray-300">
+                  {resumeQuestions.map((q, index) => (
+                    <li key={index}>{q}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+
 
         {/* TOPIC SELECTOR */}
         <div className="w-full flex flex-col items-center">
