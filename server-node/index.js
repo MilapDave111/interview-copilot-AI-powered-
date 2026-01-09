@@ -8,6 +8,7 @@ const path = require('path');
 const fs = require('fs');
 const FormData = require('form-data');
 const { fork } = require('child_process');
+const { Session } = require('inspector');
 
 const app = express();
 app.use(cors());
@@ -50,12 +51,34 @@ app.post('/api/upload',upload.single("audio"), async (req,res) => {
     try{
 
         const userTopic = req.body.topic || "General";
+        const sessionId = req.body.sessionId || "anonymous_session"
+        console.log(`Processing Table:${userTopic} | Session: ${sessionId}`);
+
+        const historyQuery = `
+            select json_log from interviwes
+            where session_id = $1
+            order by created_at ASC
+            limit 3
+        `;
+
+        const historyResult = await pool.query(historyQuery,[sessionId]);
+
+        const contextString = historyResult.rows.map(row => {
+            return `User Answered: ${row.json_log.transcript}\nAI Feedback: ${row.json_log.analysis.feedback}`;
+        }).join("\n---\n");
+
+
+        console.log("Context found:", historyResult.rowCount,"previous turns.");
+
         console.log("Topic received from Frontend:", userTopic);
 
         const formData = new FormData();
         formData.append('file', fs.createReadStream(req.file.path));
         formData.append('topic', userTopic);
-        console.log("Sending file to python AI...");
+        formData.append('history', contextString);
+
+        console.log("Sending file + history to python AI...");
+
 
         const pythonResponse = await axios.post('http://127.0.0.1:8000/transcribe',formData,{
             headers:{
@@ -73,8 +96,8 @@ app.post('/api/upload',upload.single("audio"), async (req,res) => {
         };
 
         const dbResult = await pool.query(
-            'insert into interviwes (json_log) values ($1) Returning id',
-            [interviewData]
+            'insert into interviwes (json_log, session_id) values ($1, $2 ) Returning id',
+            [interviewData, sessionId]
         );
 
         const newId = dbResult.rows[0].id;

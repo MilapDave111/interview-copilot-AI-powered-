@@ -4,6 +4,7 @@ const createTableQuery = `
     CREATE TABLE IF NOT EXISTS interviwes(
     id SERIAL PRIMARY KEY,
     json_log JSONB NOT NULL,
+    session_id text,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
 `;

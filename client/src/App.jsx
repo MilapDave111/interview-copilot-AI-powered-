@@ -4,6 +4,10 @@ import { Mic, Square, Play, Send, Loader2 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import toast, { Toaster } from 'react-hot-toast';
 
+const generateSessionId = () => {
+  return 'session_' + Math.random().toString(36).substr(2,9);
+};
+
 function App() {
 
   // --- STATE MANAGEMENT ---
@@ -17,6 +21,8 @@ function App() {
   const [selectedTopic, setSelectedTopic] = useState('General');
   const [resumeQuestions, setResumeQuestions] = useState([]);
   const [isAnalysingResume, setIsAnalysingResume] = useState(false);
+
+  const [sessionId] = useState(generateSessionId()); 
 
   // --- REFS ---
   const mediaRecorderRef = useRef(null);
@@ -136,6 +142,7 @@ function App() {
     const formData = new FormData();
     formData.append("audio", audioBlob, "recording.webm");
     formData.append("topic", selectedTopic);
+    formData.append("session_id",sessionId);
 
     try {
       const response = await axios.post('http://localhost:3000/api/upload', formData, {

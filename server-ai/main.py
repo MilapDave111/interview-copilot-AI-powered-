@@ -32,7 +32,8 @@ def read_root():
 @app.post("/transcribe")
 async def transcribe_audio(
     file: UploadFile = File(...),
-    topic :str = Form("General")
+    topic :str = Form("General"),
+    history :str = Form("")
     ):
     try:
         # 1. Save temp file
@@ -44,27 +45,36 @@ async def transcribe_audio(
 
         # 2. Transcribe
         result = model.transcribe(temp_filename)
-        
-        print("Transcription success!")
-        
-        print("Analysing text with Groq...")
+        print(f"Transcription: {result['text']}")
+
+        print(f"--- Context from DB ---\n{history}\n-----------------------")
+
+        print(f"Analysing text with Groq for Topic: {topic}...")
 
         system_prompt = f"""
-        You are a strict technical interviewer specializing in {topic}. 
-        The user is answering a question about {topic}.
+        You are a strict technical interviewer specializing in {topic}.
         
-        Analyze the user's answer.
-        Return ONLY a JSON object with these 3 fields:
-        1. "score": A number 1-10.
-        2. "feedback": A 2-sentence critique specifically regarding {topic} best practices.
-        3. "better_answer": A professional {topic} expert's version of the answer.
-        DO NOT output any markdown, just raw JSON.
+        CONTEXT HISTORY (Previous conversation):
+        {history}
+        
+        CURRENT USER ANSWER:
+        "{result['text']}"
+        
+        TASK:
+        1. Analyze the user's current answer based on the history.
+        2. If the history shows they are struggling, ask an easier follow-up.
+        3. If they are doing well, ask a harder follow-up or move to a new concept.
+        
+        OUTPUT FORMAT (JSON ONLY):
+        Return a JSON object with these fields:
+        1. "score": Number 1-10.
+        2. "feedback": A 2-sentence critique + THE NEXT FOLLOW-UP QUESTION.
+        3. "better_answer": The ideal technical answer to the user's last point.
         """
 
         chat_completion = client.chat.completions.create(
         messages=[
-            {"role":"system","content":system_prompt},
-            {"role":"user","content":result["text"]},
+            {"role":"system","content":system_prompt}
         ],
             model="llama-3.1-8b-instant",
             response_format = {"type":"json_object"}
