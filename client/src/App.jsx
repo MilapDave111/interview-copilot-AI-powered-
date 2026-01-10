@@ -3,14 +3,15 @@ import axios from 'axios';
 import { Mic, Square, Play, Send, Loader2 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import toast, { Toaster } from 'react-hot-toast';
+import { SignedIn, SignedOut, SignInButton, UserButton, useUser } from "@clerk/clerk-react";
 
 const generateSessionId = () => {
   return 'session_' + Math.random().toString(36).substr(2,9);
 };
 
 function App() {
+  const {user} = useUser();
 
-  // --- STATE MANAGEMENT ---
   const [isRecording, setIsRecording] = useState(false);
   const [audioUrl, setAudioUrl] = useState(null);
   const [audioBlob, setAudioBlob] = useState(null);
@@ -229,6 +230,35 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
       <Toaster position="top-center" toastOptions={{ style: { background: '#333', color: '#fff' } }} />
+      
+
+      <header className="w-full max-w-4xl flex justify-between items-center p-4 mb-8 border-b border-gray-700">
+        <div className="flex items-center gap-2">
+           
+           {user ? (
+             <h2 className="text-gray-300">Welcome, <span className="text-blue-400 font-bold">{user.firstName}</span></h2>
+           ) : (
+             <h2 className="text-gray-500">Guest Mode</h2>
+           )}
+        </div>
+
+        <div>
+          
+          <SignedOut>
+            <SignInButton mode="modal">
+              <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-bold transition">
+                Sign In / Sign Up
+              </button>
+            </SignInButton>
+          </SignedOut>
+
+          <SignedIn>
+            <UserButton afterSignOutUrl="/" />
+          </SignedIn>
+        </div>
+      </header>
+
+
       <h1 className="text-3xl font-bold mb-8">Interview Copilot</h1>
 
       <div className="flex flex-col items-center gap-6 w-full max-w-2xl">
